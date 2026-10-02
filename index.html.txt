@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PickleQueue - Smart Open Play Queueing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .bg-pickle-green { background-color: #0f392b; }
+    .text-pickle-lime { color: #d9f99d; }
+    .bg-pickle-lime { background-color: #bef264; }
+    .border-pickle-lime { border-color: #bef264; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Header / Navigation -->
+  <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-pickle-lime text-slate-950 font-black flex items-center justify-center text-xl shadow-lg shadow-lime-500/20">
+          PQ
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            PickleQueue
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-lime-400/10 text-pickle-lime border border-lime-400/20">Free Edition</span>
+          </h1>
+          <p class="text-xs text-slate-400 hidden sm:block">Smart Auto-Rotation & Fair Queue Manager</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-share" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold flex items-center gap-2 transition">
+          <i class="fa-solid fa-share-nodes text-pickle-lime"></i>
+          <span class="hidden md:inline">Share / QR</span>
+        </button>
+        <button id="btn-tv" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold flex items-center gap-2 transition">
+          <i class="fa-solid fa-tv text-amber-400"></i>
+          <span class="hidden md:inline">TV Mode</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Control Sub-Bar -->
+  <div class="bg-slate-800 border-b border-slate-700/60 py-2 px-4">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm">
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <label class="text-slate-400 font-medium">Active Courts:</label>
+          <select id="select-courts" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 font-bold text-pickle-lime focus:outline-none focus:border-lime-400">
+            <option value="1">1 Court</option>
+            <option value="2">2 Courts</option>
+            <option value="3" selected>3 Courts</option>
+            <option value="4">4 Courts</option>
+            <option value="5">5 Courts</option>
+            <option value="6">6 Courts</option>
+            <option value="7">7 Courts</option>
+            <option value="8">8 Courts</option>
+            <option value="9">9 Courts</option>
+            <option value="10">10 Courts</option>
+          </select>
+        </div>
+        <div class="text-slate-400">
+          Players: <span id="player-count-badge" class="font-bold text-white">0</span> / <span class="text-slate-500">50 Max</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-open-bulk" class="px-3 py-1 bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 rounded font-semibold transition">
+          <i class="fa-solid fa-file-import mr-1"></i> Bulk Upload Roster
+        </button>
+        <button id="btn-add-player" class="px-3 py-1 bg-pickle-lime text-slate-950 font-bold hover:bg-lime-300 rounded transition">
+          <i class="fa-solid fa-user-plus mr-1"></i> Add Single
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Grid -->
+  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    <!-- Left Column: Courts & Queue (8 Cols) -->
+    <div class="lg:col-span-8 space-y-6">
+      
+      <!-- Active Courts Section -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-table-tennis-paddle-ball text-pickle-lime"></i> Live Courts
+          </h2>
+          <span class="text-xs text-slate-400">Recording results automatically draws next queued players</span>
+        </div>
+        
+        <div id="courts-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Dynamic Courts Rendered Here -->
+        </div>
+      </div>
+
+      <!-- Queue Section -->
+      <div class="bg-slate-800/50 border border-slate-700/80 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-users text-amber-400"></i> Next Up Queue
+            </h2>
+            <p class="text-xs text-slate-400">Sorted by waiting priority (time sat out)</p>
+          </div>
+          <span id="queue-length" class="text-xs font-bold px-2.5 py-1 bg-slate-700 rounded-full text-slate-300">0 Waiting</span>
+        </div>
+
+        <div id="queue-list" class="space-y-2">
+          <!-- Queue Rendered Here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: W/L Leaderboard (4 Cols) -->
+    <div class="lg:col-span-4 space-y-6">
+      <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 sticky top-20">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-trophy text-yellow-400"></i> Standings & W/L
+          </h2>
+          <select id="leaderboard-filter" class="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-slate-300">
+            <option value="wl">Sort: Win/Loss</option>
+            <option value="rating">Sort: Rating</option>
+            <option value="played">Sort: Games</option>
+          </select>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="text-slate-400 border-b border-slate-700">
+                <th class="pb-2 font-semibold">#</th>
+                <th class="pb-2 font-semibold">Player</th>
+                <th class="pb-2 font-semibold text-center">W-L</th>
+                <th class="pb-2 font-semibold text-right">Win %</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboard-body" class="divide-y divide-slate-700/50">
+              <!-- Leaderboard rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modals -->
+  <!-- Bulk Import Modal -->
+  <div id="modal-bulk" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-white">Bulk Import Roster</h3>
+        <button class="text-slate-400 hover:text-white btn-close-modal"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <p class="text-xs text-slate-400 mb-3">Paste names line-by-line. Optionally add starting Win/Loss comma-separated: <br><code class="text-pickle-lime">Player Name, Wins, Losses</code></p>
+      <textarea id="bulk-text" rows="8" placeholder="John Doe, 2, 1&#10;Jane Smith, 4, 0&#10;Alex Wong" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-pickle-lime font-mono"></textarea>
+      <div class="flex justify-between items-center mt-4">
+        <span class="text-xs text-slate-400">Strict limit: 50 players max.</span>
+        <div class="flex gap-2">
+          <button class="px-4 py-2 bg-slate-700 text-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-600 btn-close-modal">Cancel</button>
+          <button id="btn-submit-bulk" class="px-4 py-2 bg-pickle-lime text-slate-950 rounded-xl text-sm font-bold hover:bg-lime-300">Import Roster</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Single Player Modal -->
+  <div id="modal-single" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-white">Add New Player</h3>
+        <button class="text-slate-400 hover:text-white btn-close-modal"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label class="text-xs font-semibold text-slate-300 mb-1 block">Player Name</label>
+          <input type="text" id="single-name" placeholder="Enter player full name" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pickle-lime">
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button class="px-4 py-2 bg-slate-700 text-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-600 btn-close-modal">Cancel</button>
+        <button id="btn-submit-single" class="px-4 py-2 bg-pickle-lime text-slate-950 rounded-xl text-sm font-bold hover:bg-lime-300">Add to Queue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share & QR Modal -->
+  <div id="modal-share" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-white">Share Live Queue</h3>
+        <button class="text-slate-400 hover:text-white btn-close-modal"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <p class="text-xs text-slate-400 mb-4">Scan QR code to view live court status & queue on any phone:</p>
+      <div id="qrcode" class="bg-white p-3 rounded-xl inline-block mb-4"></div>
+      <input type="text" id="share-url-input" readonly class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 mb-3 text-center">
+      <button id="btn-copy-url" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-semibold">Copy Link</button>
+    </div>
+  </div>
+
+  <!-- JS Logic -->
+  <script>
+    // State Management
+    const MAX_PLAYERS = 50;
+    let state = {
+      courtsCount: 3,
+      players: [], // { id, name, wins, losses, elo, status: 'queued'|'playing'|'resting', waitStartTime }
+      courts: []   // { id, name, teamA: [pId1, pId2], teamB: [pId3, pId4], startTime }
+    };
+
+    // Load Initial Demo Roster
+    function initApp() {
+      const saved = localStorage.getItem('picklequeue_state');
+      if (saved) {
+        try { state = JSON.parse(saved); } catch(e){}
+      } else {
+        // Default Demo Data
+        state.players = [
+          { id: 'p1', name: 'Alex Wong', wins: 3, losses: 1, elo: 1200, status: 'queued', waitStartTime: Date.now() - 100000 },
+          { id: 'p2', name: 'Sarah Connor', wins: 4, losses: 0, elo: 1250, status: 'queued', waitStartTime: Date.now() - 90000 },
+          { id: 'p3', name: 'Mike Ross', wins: 1, losses: 2, elo: 1150, status: 'queued', waitStartTime: Date.now() - 80000 },
+          { id: 'p4', name: 'Emma Watson', wins: 2, losses: 2, elo: 1180, status: 'queued', waitStartTime: Date.now() - 70000 },
+          { id: 'p5', name: 'David Beckham', wins: 0, losses: 3, elo: 1100, status: 'queued', waitStartTime: Date.now() - 60000 },
+          { id: 'p6', name: 'Lisa Kudrow', wins: 2, losses: 1, elo: 1210, status: 'queued', waitStartTime: Date.now() - 50000 }
+        ];
+      }
+      
+      initCourts(state.courtsCount);
+      saveState();
+      renderAll();
+    }
+
+    function saveState() {
+      localStorage.setItem('picklequeue_state', JSON.stringify(state));
+    }
+
+    function initCourts(count) {
+      state.courtsCount = parseInt(count);
+      const currentCourts = state.courts || [];
+      const newCourts = [];
+
+      for (let i = 1; i <= state.courtsCount; i++) {
+        const existing = currentCourts.find(c => c.id === i);
+        if (existing) {
+          newCourts.push(existing);
+        } else {
+          newCourts.push({ id: i, name: `Court ${i}`, teamA: [], teamB: [], startTime: null });
+        }
+      }
+
+      // Handle unassigned players if courts were reduced
+      if (currentCourts.length > state.courtsCount) {
+        const removedCourts = currentCourts.slice(state.courtsCount);
+        removedCourts.forEach(c => {
+          [...c.teamA, ...c.teamB].forEach(pId => {
+            const p = state.players.find(x => x.id === pId);
+            if (p) { p.status = 'queued'; p.waitStartTime = Date.now(); }
+          });
+        });
+      }
+
+      state.courts = newCourts;
+      fillEmptyCourts();
+    }
+
+    // Auto-Matchmaking Algorithm
+    function fillEmptyCourts() {
+      state.courts.forEach(court => {
+        if (court.teamA.length === 0 && court.teamB.length === 0) {
+          // Get 4 longest waiting queued players
+          const queued = state.players
+            .filter(p => p.status === 'queued')
+            .sort((a, b) => a.waitStartTime - b.waitStartTime);
+
+          if (queued.length >= 4) {
+            const selected = queued.slice(0, 4);
+            // Sort selected by Elo to balance teams
+            selected.sort((a, b) => b.elo - a.elo);
+
+            court.teamA = [selected[0].id, selected[3].id];
+            court.teamB = [selected[1].id, selected[2].id];
+            court.startTime = Date.now();
+
+            selected.forEach(p => p.status = 'playing');
+          }
+        }
+      });
+      saveState();
+    }
+
+    // Record Match Result & Auto-Next Assignment
+    function recordResult(courtId, winningTeam) {
+      const court = state.courts.find(c => c.id === courtId);
+      if (!court || court.teamA.length === 0) return;
+
+      const winners = winningTeam === 'A' ? court.teamA : court.teamB;
+      const losers = winningTeam === 'A' ? court.teamB : court.teamA;
+
+      winners.forEach(id => {
+        const p = state.players.find(x => x.id === id);
+        if (p) {
+          p.wins += 1;
+          p.elo += 25;
+          p.status = 'queued';
+          p.waitStartTime = Date.now();
+        }
+      });
+
+      losers.forEach(id => {
+        const p = state.players.find(x => x.id === id);
+        if (p) {
+          p.losses += 1;
+          p.elo = Math.max(800, p.elo - 20);
+          p.status = 'queued';
+          p.waitStartTime = Date.now();
+        }
+      });
+
+      // Clear Court
+      court.teamA = [];
+      court.teamB = [];
+      court.startTime = null;
+
+      // Automatically fill freed court with next queued players
+      fillEmptyCourts();
+      renderAll();
+    }
+
+    // Render Functions
+    function renderAll() {
+      renderCourts();
+      renderQueue();
+      renderLeaderboard();
+      document.getElementById('player-count-badge').textContent = state.players.length;
+    }
+
+    function renderCourts() {
+      const container = document.getElementById('courts-grid');
+      container.innerHTML = '';
+
+      state.courts.forEach(court => {
+        const isOccupied = court.teamA.length > 0;
+        const pA1 = state.players.find(p => p.id === court.teamA[0]);
+        const pA2 = state.players.find(p => p.id === court.teamA[1]);
+        const pB1 = state.players.find(p => p.id === court.teamB[0]);
+        const pB2 = state.players.find(p => p.id === court.teamB[1]);
+
+        const card = document.createElement('div');
+        card.className = "bg-slate-800 border border-slate-700/80 rounded-2xl p-4 flex flex-col justify-between shadow-lg relative overflow-hidden";
+        
+        if (isOccupied) {
+          card.innerHTML = `
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-2 mb-3">
+              <span class="font-black text-sm text-pickle-lime uppercase tracking-wider">${court.name}</span>
+              <span class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium">In Progress</span>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3 mb-4 text-center">
+              <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-700/50">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Team 1</span>
+                <div class="font-bold text-sm text-white">${pA1 ? pA1.name : ''}</div>
+                <div class="font-bold text-sm text-white">${pA2 ? pA2.name : ''}</div>
+              </div>
+              <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-700/50">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Team 2</span>
+                <div class="font-bold text-sm text-white">${pB1 ? pB1.name : ''}</div>
+                <div class="font-bold text-sm text-white">${pB2 ? pB2.name : ''}</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="recordResult(${court.id}, 'A')" class="py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-bold rounded-lg text-xs transition">Team 1 Won</button>
+              <button onclick="recordResult(${court.id}, 'B')" class="py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-bold rounded-lg text-xs transition">Team 2 Won</button>
+            </div>
+          `;
+        } else {
+          card.innerHTML = `
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-2 mb-3">
+              <span class="font-black text-sm text-slate-400 uppercase tracking-wider">${court.name}</span>
+              <span class="text-xs bg-slate-700/50 text-slate-400 px-2 py-0.5 rounded-full">Available</span>
+            </div>
+            <div class="py-8 text-center text-slate-500 text-xs">
+              <i class="fa-solid fa-clock text-2xl mb-2 block text-slate-600"></i>
+              Waiting for 4 queued players...
+            </div>
+          `;
+        }
+        container.appendChild(card);
+      });
+    }
+
+    function renderQueue() {
+      const container = document.getElementById('queue-list');
+      container.innerHTML = '';
+
+      const queued = state.players
+        .filter(p => p.status === 'queued')
+        .sort((a, b) => a.waitStartTime - b.waitStartTime);
+
+      document.getElementById('queue-length').textContent = `${queued.length} Waiting`;
+
+      if (queued.length === 0) {
+        container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">No players currently waiting in queue.</div>`;
+        return;
+      }
+
+      queued.forEach((p, idx) => {
+        const item = document.createElement('div');
+        item.className = "flex items-center justify-between bg-slate-900/60 border border-slate-700/50 rounded-xl p-3";
+        item.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="w-6 h-6 rounded-full bg-slate-800 text-pickle-lime text-xs font-bold flex items-center justify-center border border-slate-700">${idx + 1}</span>
+            <div>
+              <div class="font-semibold text-sm text-white">${p.name}</div>
+              <div class="text-[10px] text-slate-400">Record: ${p.wins}W - ${p.losses}L</div>
+            </div>
+          </div>
+          <button onclick="removePlayer('${p.id}')" class="text-slate-500 hover:text-red-400 p-1 transition"><i class="fa-solid fa-trash-can text-xs"></i></button>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function renderLeaderboard() {
+      const container = document.getElementById('leaderboard-body');
+      container.innerHTML = '';
+
+      const sortBy = document.getElementById('leaderboard-filter').value;
+      let sorted = [...state.players];
+
+      if (sortBy === 'wl') {
+        sorted.sort((a, b) => (b.wins - b.losses) - (a.wins - a.losses));
+      } else if (sortBy === 'rating') {
+        sorted.sort((a, b) => b.elo - a.elo);
+      } else if (sortBy === 'played') {
+        sorted.sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses));
+      }
+
+      sorted.forEach((p, idx) => {
+        const total = p.wins + p.losses;
+        const winPct = total > 0 ? Math.round((p.wins / total) * 100) : 0;
+        const row = document.createElement('tr');
+        row.className = "hover:bg-slate-700/30 transition";
+        row.innerHTML = `
+          <td class="py-2.5 font-bold ${idx < 3 ? 'text-amber-400' : 'text-slate-500'}">${idx + 1}</td>
+          <td class="py-2.5 font-medium text-slate-200">${p.name}</td>
+          <td class="py-2.5 text-center font-bold text-pickle-lime">${p.wins}-${p.losses}</td>
+          <td class="py-2.5 text-right text-slate-400">${winPct}%</td>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function removePlayer(id) {
+      state.players = state.players.filter(p => p.id !== id);
+      saveState();
+      renderAll();
+    }
+
+    // Modal Handlers & Actions
+    document.getElementById('select-courts').addEventListener('change', (e) => {
+      initCourts(e.target.value);
+      renderAll();
+    });
+
+    document.getElementById('btn-open-bulk').onclick = () => document.getElementById('modal-bulk').classList.remove('hidden');
+    document.getElementById('btn-add-player').onclick = () => document.getElementById('modal-single').classList.remove('hidden');
+    
+    document.querySelectorAll('.btn-close-modal').forEach(btn => {
+      btn.onclick = () => {
+        document.getElementById('modal-bulk').classList.add('hidden');
+        document.getElementById('modal-single').classList.add('hidden');
+        document.getElementById('modal-share').classList.add('hidden');
+      };
+    });
+
+    // Submit Bulk Roster
+    document.getElementById('btn-submit-bulk').onclick = () => {
+      const text = document.getElementById('bulk-text').value.trim();
+      if (!text) return;
+
+      const lines = text.split('\n');
+      lines.forEach(line => {
+        if (state.players.length >= MAX_PLAYERS) return;
+        const parts = line.split(',').map(s => s.trim());
+        const name = parts[0];
+        const wins = parts[1] ? parseInt(parts[1]) || 0 : 0;
+        const losses = parts[2] ? parseInt(parts[2]) || 0 : 0;
+
+        if (name && !state.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+          state.players.push({
+            id: 'p_' + Date.now() + Math.random().toString(36).substr(2, 4),
+            name: name,
+            wins: wins,
+            losses: losses,
+            elo: 1200 + (wins * 10) - (losses * 10),
+            status: 'queued',
+            waitStartTime: Date.now()
+          });
+        }
+      });
+
+      document.getElementById('bulk-text').value = '';
+      document.getElementById('modal-bulk').classList.add('hidden');
+      fillEmptyCourts();
+      renderAll();
+    };
+
+    // Submit Single Player
+    document.getElementById('btn-submit-single').onclick = () => {
+      if (state.players.length >= MAX_PLAYERS) {
+        alert("Maximum limit of 50 players reached.");
+        return;
+      }
+      const name = document.getElementById('single-name').value.trim();
+      if (name) {
+        state.players.push({
+          id: 'p_' + Date.now(),
+          name: name,
+          wins: 0,
+          losses: 0,
+          elo: 1200,
+          status: 'queued',
+          waitStartTime: Date.now()
+        });
+        document.getElementById('single-name').value = '';
+        document.getElementById('modal-single').classList.add('hidden');
+        fillEmptyCourts();
+        renderAll();
+      }
+    };
+
+    // Share Modal & QR Code
+    document.getElementById('btn-share').onclick = () => {
+      const url = window.location.href;
+      document.getElementById('share-url-input').value = url;
+      document.getElementById('qrcode').innerHTML = '';
+      new QRCode(document.getElementById('qrcode'), { text: url, width: 140, height: 140 });
+      document.getElementById('modal-share').classList.remove('hidden');
+    };
+
+    document.getElementById('btn-copy-url').onclick = () => {
+      const input = document.getElementById('share-url-input');
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      alert("Link copied to clipboard!");
+    };
+
+    document.getElementById('leaderboard-filter').onchange = renderLeaderboard;
+
+    // Fullscreen TV Mode
+    document.getElementById('btn-tv').onclick = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    };
+
+    // Initialize
+    window.onload = initApp;
+  </script>
+</body>
+</html>
